@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+[[ $# -eq 2 ]] || { echo "ERROR: Incorrect command line arguments"; exit 1; }
+DIR_NEW=$1
+DIR_OLD=$2
+
+[[ -d $DIR_NEW ]] || { echo "ERROR: $DIR_NEW does not exist"; exit 1; }
+[[ -d $DIR_OLD ]] || { echo "CREATING: $DIR_OLD does not exist"; cp -a $DIR_NEW $DIR_OLD; exit 0; }
+
+for newfile in $DIR_NEW/*
+do
+    oldfile=$DIR_OLD/$(basename $newfile)
+    if [[ -e $oldfile ]]
+    then
+       if cmp -s $newfile $oldfile
+       then
+	   printf "${GREEN}copying OLD to NEW${CLEAR}: "
+	   cp -vp $oldfile $newfile
+       else
+	   printf "${PURPLE}copying NEW to OLD${CLEAR}: "
+	   cp -vp $newfile $oldfile
+       fi
+    else
+	printf "${BLUE}creating NEW in OLD${CLEAR}: "
+	cp -vp $newfile $oldfile
+    fi
+done
+
+for oldfile in $DIR_OLD/*
+do
+    newfile=$DIR_NEW/$(basename $oldfile)
+    if [[ ! -e $newfile ]]
+    then
+	printf "${RED}removing OLD${CLEAR}: "
+	rm -v $oldfile
+    fi
+done

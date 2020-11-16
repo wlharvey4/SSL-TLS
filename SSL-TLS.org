@@ -3,8 +3,8 @@
 #+title:Implementing SSL TLS Using Cryptography and PKI
 #+subtitle:{{{version}}} {{{date}}}
 #+author:LOLH
-#+date:2020-11-15 17:56
-#+macro:version Version 0.0.0
+#+date:2020-11-15 22:52
+#+macro:version Version 0.0.1
 #+macro:upload-date (eval (current-time-string))
 #+bucket:pinecone-forest.com
 
@@ -13,10 +13,226 @@
 #+texinfo:@insertcopying
 
 
+* About
+  :PROPERTIES:
+  :unnumbered: yes
+  :END:
+#+texinfo: @heading Implementing SSL / TLS Using Cryptography and PKI
+#+texinfo: @subheading by Joshua Davies
+#+texinfo: @subsubheading ISBN: 978-0-470-92041-1
+
+#+texinfo: @heading DESCRIPTION
+Hands-on, practical  guide to implementing  SSL and TLS protocols  for Internet
+security  If you  are  a network  professional who  knows  C programming,  this
+practical book  is for  you. Focused  on how to  implement Secure  Socket Layer
+(SSL) and  Transport Layer  Security (TLS),  this book  guides you  through all
+necessary steps, whether  or not you have a working  knowledge of cryptography.
+The book covers  SSLv2, TLS 1.0, and TLS 1.2,  including implementations of the
+relevant   cryptographic  protocols,   secure  hashing,   certificate  parsing,
+certificate generation, and more.
+
+#+texinfo: @subheading Coverage includes:
+
+- Understanding Internet Security
+- Protecting against Eavesdroppers with Symmetric Cryptography
+- Secure Key Exchange over an Insecure Medium with Public Key Cryptography
+- Authenticating Communications Using Digital Signatures
+- Creating a Network of Trust Using X.509 Certificates
+- A Usable, Secure Communications Protocol: Client-Side TLS
+- Adding Server-Side TLS 1.0 Support
+- Advanced SSL Topics
+- Adding TLS 1.2 Support to Your TLS Library
+- Other Applications of SSL
+- A Binary Representation of Integers: A Primer
+- Installing TCPDump and OpenSSL
+- Understanding the Pitfalls of SSLv2
+
+
+Set up and launch a working implementation of SSL with this practical guide.
+
+- Introduction xxvii
+- Chapter 1 Understanding Internet Security 1
+- Chapter 2 Protecting Against Eavesdroppers with Symmetric Cryptography 29
+- Chapter 3 Secure Key Exchange over an Insecure Medium with Public Key Cryptography 91
+- Chapter 4 Authenticating Communications Using Digital Signatures 157
+- Chapter 5 Creating a Network of Trust Using X.509 Certifi cates 221
+- Chapter 6 A Usable, Secure Communications Protocol: Client-Side TLS 297
+- Chapter 7 Adding Server-Side TLS 1.0 Support 381
+- Chapter 8 Advanced SSL Topics 415
+- Chapter 9 Adding TLS 1.2 Support to Your TLS Library 479
+- Chapter 10 Other Applications of SSL 543
+- Appendix A Binary Representation of Integers: A Primer 567
+- Appendix B Installing TCPDump and OpenSSL 573
+- Appendix C Understanding the Pitfalls of SSLv2 579
+- Index 629
+
 * Introduction
 :PROPERTIES:
 :unnumbered: t
 :END:
+The  book  examines the  /Secure  Sockets  Layer/  (SSL) and  /Transport  Layer
+Security/ (TLS) protocols in detail, taking a bottom-up approach.
+
+#+cindex:SSL
+- SSL :: standardized, widely  implemented, peer-reviewed protocol for applying
+  cryptographic primitives to arbitrary networked communications. It provides:
+  - privacy,
+  - integrity,
+  - some measure of authenticity
+  - to otherwise inherently untrustworthy network connections.
+
+
+This book develops, incrementally, a relatively complete SSL/TLS library.
+
+- First, all of the relevant cryptographic protocols are examined and
+  developed;
+- Then, the library itself is built piece by piece.
+
+
+All of the code developed in this book is C (not C++) code.
+
+All of the protocols  and examples are presented in general form  as well as in
+source code form  so that if you're interested in  a higher-level overview, you
+can skip the code examples and the book should still make sense.
+
+#+texinfo: @heading Why Source Code is Partially Incomplete
+
+Effectively,  production-grade libraries  have at  least five  primary concerns
+regarding their source code:
+
+1. It must work
+
+2. It must be secure
+
+3. It should be as fast as reasonably possible
+
+4. It must be modular and extensible
+
+5. It must be easy to read and understand
+
+
+When a  higher-numbered concern  conflicts with  a lower-numbered  concern, the
+lower-numbered concern  wins. This must  be the  case for cade  that's actually
+used by real people  to perform real tasks. The code is  not always pretty, nor
+is it particularly readable, when security-speed-modularity take precedence.
+
+The priorities for the code in this book are:
+
+1. It must work
+
+2. It should be as readable as possible.
+
+
+Security, speed  and modularity are  not concerns.  The code presented  in this
+book is  /not/ particularly secure. For  example, when the algorithms  call for
+random bytes, the  code in this book just returns  sequentially numbered bytes,
+which is the exact  opposite of the random bytes that  the algorithm calls for.
+This is done to simplify the code as well  as to make sure that what you see if
+you try it out yourself matches what you see in the book.
+
+There  isn't any  bounds-checking on  buffers  or verification  that the  input
+matches what's  expected, which are  things that a  proper library ought  to be
+doing. I've omitted  these things to keep this book's  page count under control
+as well as to avoid obscuring the  purpose of the example code with hundreds of
+lines of error checking.
+
+If  you   are  working   with  any   production  code   you  should   prefer  a
+well-established library such  as OpenSSL, GnuTLS, or NSS  over home-grown code
+any day. This book should help  you understand the internals of these libraries
+so that, when it comes time to use one, you know exactly what's going on at all
+stages.
+
+** Supplemental Web Sites
+
+#+cindex:Request for Comment
+#+cindex:RFC
+#+cindex:IETF
+#+cindex:Internet Engineering Task Force
+To see the source /Request for Comment/ documents (RFCs), visit the /Internet
+Engineering Task Force/ (IETF) web site at:
+
+- https:www.ietf.org
+
+
+Each RFC is stored in a document under:
+: https://www.ietf.org/rfc/rfc<dddd>.txt
+where <dddd> is the RFC number, e.g.,
+
+https://www.ietf.org/rfc/rfc2246.txt
+
+for example.
+
+See also:
+
+- International Telecommunication Union (ITU) "X series" documents
+
+  - https://www.itu.int/rec/T-REC-X/en
+
+- RSA laboratories' /Public Key Cryptography Standards/ (PKCS)
+  - https://www.rsa.com/rsalabs/node.asp?id=2124
+
+  - https://tools.ietf.org/html/rfc3447#page-70
+
+
+All of the standards documents referenced in this book are freely available and
+downloadable. I  try to explain  the background information that  the standards
+documents  always seem  to take  for granted.  I am  assuming that  if you  are
+interested  in the  low-level  detail you  can always  refer  to the  standards
+document itself.
+
+** Companion Source Code
+
+- https://www.wiley.com/go/implementingssl
+- https://www.wiley.com/en-us/Implementing+SSL+TLS+Using+Cryptography+and+PKI-p-9780470920411
+
+** How to Read This Book
+This book is written to be read cover  to cover. If you have some background in
+C programming,  you will  want to  read through  and compile  and run  the code
+samples. The benefit  of the code samples  is that it's impossible  to omit any
+detail---accidentally  or  intentionally---when writing  code,  so  if you  can
+understand the  code, it will cement  your understanding of the  text preceding
+it.
+
+Although this is a book about SSL/TLS, the first half of the book just sets the
+stage for  SSL/TLS by presenting all  of the protocols and  standards they rely
+on.
+
+My  primary motivation  in writing  this book  was to  present, in  detail, the
+interplay between the SSL and TLS protocols and the cryptographic routines that
+they rely upon.
+
+** Errata
+|---------+------+-----------------------------------------------------------------------------------------------------------------------------------|
+| Chapter | Page | Details                                                                                                                           |
+|---------+------+-----------------------------------------------------------------------------------------------------------------------------------|
+|         |   29 | Error in Text: "GET" should be the letters G, E, and T followed by a space.                                                       |
+|         |      | This is referring to a specific character sequence.                                                                               |
+|         |   71 | Error in Text: Third paragraph, second sentence:                                                                                  |
+|         |      | "If you multiply this with any other (four-column) matrix"                                                                        |
+|         |      | should read:                                                                                                                      |
+|         |      | "If you multiply this with any other (four row) matrix"                                                                           |
+|         |      | ALSO The lowest matrix, on the left-hand, should show a ^-1 inversion  notation                                                   |
+|         |   90 | Error in Text: Last paragraph, last sentence should read:                                                                         |
+|         |      | "CTR mode didn't make it into TLS..."                                                                                             |
+|         |  100 | Error in Text: At the bottom, should read:                                                                                        |
+|         |      | "49200 + 6150 + 738 = 56088"                                                                                                      |
+|         |  129 | Error in Text: the "Procedure for generating RSA keypairs" sidebar states:                                                        |
+|         |      | 3. Compute the totient function (p-1)(1-1)                                                                                        |
+|         |      | This should read:                                                                                                                 |
+|         |      | 3. Compute the totient function (p-1)(q-1)                                                                                        |
+|         |  130 | Error in Text                                                                                                                     |
+|         |      | Reads: "its slow runtime limits is practical uses".                                                                               |
+|         |      | Should read: "its slow runtime limits its practical uses".                                                                        |
+|         |  133 | Error in Text: Reads: "sqrt(x^3-ax) has no solutions between 0 and 1 because x^3 - ax < 0".                                       |
+|         |      | Should read: "sqrt(x^3-x) has no solutions between 0 and 1 because x^3 - x < 0".                                                  |
+|         |  155 | Error in Text: Text states:                                                                                                       |
+|         |      | "OpenSSL 1.0, although it includes elliptic-curve operations, doesn't support TLS 1.2, and therefore doesn't support online ECC". |
+|         |      | Actually, as of February 8, 2011, while openssl 0.9.8r does not support elliptic-curve ciphersuites, openssl 1.0.0 does.          |
+|         |  160 | Error in Text: Text states:                                                                                                       |
+|         |      | "Obviously, with such a 4:1 ratio of input blocks to output blocks, there will be at least a one in four chance of a collision."  |
+|         |      | Actually, over the entire input space, the chance of a collision is actually significantly smaller than 1 in 4.                   |
+|---------+------+-----------------------------------------------------------------------------------------------------------------------------------|
+
 * Chapter
 
 * Build Tools
@@ -87,9 +303,7 @@
   # credentials into ~/.aws/credentials.
   AWS := aws
   S3  := $(AWS) s3
-
-  # The AWS region of choice; this can also be in .aws/config
-  REGION := --region us-west-2
+  CFD := $(AWS) cloudfront
 
   ### END OF USER-DEPENDENT VARIABLES
   ###############################################################################
@@ -134,15 +348,16 @@
   # both, and  so this code  finds the url's  that are in  my Cloudfront
   # account, which presumably will serve https.  If the url is not here,
   # then this must be set up to serve http instead.
-  HTTP_S := $(shell $(CFD) | perl -MJSON::PP -e \
-	  '$$/=""; \
-	   my @urls = (); \
-	   my $$json=JSON::PP->new->decode(<STDIN>); \
-	   for my $$item ( @{$$json->{"DistributionList"}{"Items"}} ) { \
-		  push @urls, @{$$item->{"Aliases"}{"Items"}}; \
-	   } \
-	  my $$found = grep { /'$(BUCKET)'/ } @urls; \
-	  print "http", ($$found ? "s" : "");')
+  HTTP_S := $(shell $(CFD) list-distributions \
+	  | perl -MJSON::PP -e \
+		  '$$/=""; \
+		   my @urls = (); \
+		   my $$json=JSON::PP->new->decode(<STDIN>); \
+		   for my $$item ( @{$$json->{"DistributionList"}{"Items"}} ) { \
+			  push @urls, @{$$item->{"Aliases"}{"Items"}}; \
+		   } \
+		  my $$found = grep { /'$(BUCKET)'/ } @urls; \
+		  print "http", ($$found ? "s" : "");')
 
   HTTPS_BUCKET := https://$(BUCKET)
 
@@ -281,11 +496,11 @@
   EXCL_INCL	:= --exclude "*" --include "*.html"
   INCL_IMAGES	:= --exclude "*" --include "*.jpg" --include "*.png"
   GRANTS	:= --grants read=uri=http://acs.amazonaws.com/groups/global/AllUsers
-  S3SYNC	:= $(S3) sync --delete $(EXCL_INCL) $(SRC) $(DST_OLD) $(REGION) $(GRANTS)
-  S3MOVE	:= $(S3) mv --recursive $(DST_OLD) $(DST_NEW) $(REGION) $(GRANTS)
-  S3COPY	:= $(S3) cp $(INDEX) $(S3_BUCKET) $(REGION) $(GRANTS)
+  S3SYNC	:= $(S3) sync --delete $(EXCL_INCL) $(SRC) $(DST_OLD) $(GRANTS)
+  S3MOVE	:= $(S3) mv --recursive $(DST_OLD) $(DST_NEW) $(GRANTS)
+  S3COPY	:= $(S3) cp $(INDEX) $(S3_BUCKET) $(GRANTS)
   S3REMOVE	:= $(S3) rm $(S3_BUCKET)/$(S3PROJ) --recursive
-  S3IMAGESYNC	:= $(S3) sync $(INCL_IMAGES) $(IMAGES) $(S3_BUCKET)/$(IMAGES) $(REGIONS) $(GRANTS)
+  S3IMAGESYNC	:= $(S3) sync $(INCL_IMAGES) $(IMAGES) $(S3_BUCKET)/$(IMAGES) $(GRANTS)
 
   ###############################################################################
 
@@ -1043,23 +1258,27 @@ Copyright \copy 2020 by {{{author}}}
 
 * Concept Index
 :PROPERTIES:
-:index:	cp
-:END:
+  :appendix: yes
+  :index:    cp
+  :END:
 
 * Program Index
 :PROPERTIES:
-:index:	pg
-:END:
+  :appendix: yes
+  :index:    pg
+  :END:
 
 * Function Index
 :PROPERTIES:
-:index:	fn
-:END:
+  :appendix: yes
+  :index:    fn
+  :END:
 
 * Variable Index
 :PROPERTIES:
-:index:	vr
-:END:
+  :index: vr
+  :appendix: yes
+  :END:
 
 
 * Configuration							   :noexport:
