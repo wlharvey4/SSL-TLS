@@ -3,8 +3,8 @@
 #+title:Implementing SSL TLS Using Cryptography and PKI
 #+subtitle:{{{version}}} {{{date}}}
 #+author:LOLH
-#+date:2020-11-15 22:52
-#+macro:version Version 0.0.1
+#+date:2020-11-16 21:22
+#+macro:version Version 0.0.2
 #+macro:upload-date (eval (current-time-string))
 #+bucket:pinecone-forest.com
 
@@ -233,8 +233,143 @@ they rely upon.
 |         |      | Actually, over the entire input space, the chance of a collision is actually significantly smaller than 1 in 4.                   |
 |---------+------+-----------------------------------------------------------------------------------------------------------------------------------|
 
-* Chapter
-
+* Understanding Internet Security
+How secure is the date that you transmit on the Internet?  How vulnerable is
+your personal data to hackers?
+
+- standard encryption algorithms
+- public-key algorithms
+  - RSA
+  - DSA
+- Data Encryption Standard -> Advanced Encryption Standard
+- HTTPS -> browser security
+- PGP -> email security
+- man in the middle attacks
+- timing attacks
+- side-channel attacks
+- certificates -> expired, untrusted CA
+- zero-day exploit
+- IETF
+- PKCS
+- FIPS
+- NIST
+- ITU
+- ASN
+- RFC 2246 -> TLS
+- symmetric cryptography
+- public-key cryptography
+- digital signature algorithms
+- X.509 certificates
+
+
+As a practitioner rather than a casual  user, it's not enough to treat security
+as a  black box or  a binary property;  you need to  know what the  security is
+doing and how it's doing it so that  you know what you are and aren't protected
+against.  This book was written for you---the professional programmer who
+understands the basics of security but wants to uncover the details without
+reading thousands of pages of specifications.
+
+This book begins by examining sockets and socket programming in brief.
+
+Afterward, it moves on to a detailed examination of cryptographic concepts.
+
+and finally applies thenm to SSL/TLS.
+
+You examine what SSL/TLS does, what it doesn't do, and how it does it.
+
+** What are Secure Sockets?
+#+cindex:packet-switching network
+The Internet is a /packet-switching/ network.
+
+#+cindex:packetize data
+This means that, for two hosts to communicate, they must /packetize/ their data
+and  submit it  to a  router  with the  destination address  prepended to  each
+packet. The router then analyzes the  destination address and routes the packet
+either to  the target host, or  to a router that  it believes is closer  to the
+target host.
+
+#+cindex:Internet Protocol
+#+cindex:IP
+#+cindex:RFC 971
+The /Internet Protocol/  (IP), outlined in [[https://www.ietf.org/rfc/rfc971.txt][RFC 971]], describes  the standard for
+how this packetization  is performed and how addresses are  attached to packets
+in headers.
+
+A packet can and probably will pass through many routers between the sender and
+the receiver.  If the contents  of the data in  that packet are  sensitive, the
+sender  would probably  like to  ensure  taht only  the receiver  can read  the
+packet, rather than the packet being readableby any router along the way.
+
+Even if the sender trusts the routers and their operators, routers can be
+compromised by malicious individuals, called /attackers/ in security
+terminology, and tricked into forwarding traffic that's meant for one
+destination to another, as shown in
+- http://www.securesphere.net/download/papers/dnsspoof.htm
+- https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.1004.5649&rep=rep1&type=pdf
+- https://www.imperva.com/learn/application-security/dns-spoofing/
+- https://www.giac.org/paper/gcih/364/dns-spoofing-attack/103863
+
+
+#+cindex:traceroute
+To get an idea how many different  hosts a packet passes through betwen you and
+a  server,  you  can  use  the ~traceroute~  facility  that  comes  with  every
+Internet-capable  computer to  print a  list of  the hops  between you  and any
+server on the Internet.
+
+: $ traceroute www.travelocity.com
+
+#+cindex:ICMP timeout packet
+Each router along the way is supposed to respond with a special packet called
+an ICMP timeout packet, as described in RFC 793, with its own address.  The
+routers that cnnot or will not do so are represented with =* * *=.
+
+#+cindex:socket
+#+cindex:synchronize (SYN) packet
+#+cindex:SYN (synchronize) packet
+In network programming parlance, the tenuous  connection between a sender and a
+receiver is referred  to as a /socket/.  When one host --- the  /client/ --- is
+ready to establish  a connection with another  --- the /server/ ---  it sends a
+/synchronize/ (SYN)  packet to the server.  If the server is  willing to accept
+the connection,  it responds with  a SYN  and acknowledge packet.  Finally, the
+client  acknowledges  the  acknowledgment  and  both sides  have  agreed  on  a
+connection.
+
+#+cindex:TCP handshake
+#+cindex:handshake, TCP
+This three-packet exchange is referred to as the /TCP handshake/.
+
+#+cindex:source port
+#+cindex:destination port
+The connection is associated with a pair  of numbers: the /source port/ and the
+/destination  port/,  which are  attached  to  each  subsequent packet  in  the
+communication.
+
+#+cindex:TCP
+#+cindex:Transport Control Protocol
+Because the server is sitting around, always listening for connections, it must
+advertise  its   destination  port  ahead  of   time.  How  this  is   done  is
+protocol-specific.  Some protocols  are lucky  enough to  have "magic  numbers"
+associated with  them that are well-known  (you the programmer are  supposed to
+know them). This  is the /Transport Control Protocol/ (TCP);  RFC 793 describes
+exactly how  this works and  how both sides agree  on a source  and destination
+port and how they sequence these and subsequent packets.
+
+TCP  and IP  are usually  implemented together  and called  TCP/IP. A  /socket/
+refers to an established TCP connection;  both sides, client and server, have a
+socket  after  the three-way  handshake  has  been  completed. If  either  side
+transmits data  over this socket, TCP  guarantees, to the best  of its ability,
+that the other side sees this data in  the order it was sent. As is required by
+IP, any intermediate router along the way also sees this data.
+
+#+cindex:SSL
+#+cindex:Secure Sockets Layer
+/SSL/  stands  for /Secure  Sockets  Layer/  and  was originally  developed  by
+Netscape as a way to allow the browser technology to be used for e-commerce. It
+has since been standardized and renamed /Transport Layer Security/ (TLS). After
+a socket has been established between the  client and the server, SSL defines a
+second handshake that  can be performed to establish a  secure channel over the
+inherently insecure TCP layer.
+
 * Build Tools
 :PROPERTIES:
 :appendix: t
