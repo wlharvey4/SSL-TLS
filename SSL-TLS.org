@@ -3,8 +3,8 @@
 #+title:Implementing SSL TLS Using Cryptography and PKI
 #+subtitle:{{{version}}} {{{date}}}
 #+author:LOLH
-#+date:2020-11-19 07:01
-#+macro:version Version 0.0.3
+#+date:2020-11-19 09:41
+#+macro:version Version 0.0.4
 #+macro:upload-date (eval (current-time-string))
 #+bucket:pinecone-forest.com
 
@@ -409,9 +409,13 @@ developing an  HTTP client  and adding security  features to  it incrementally,
 finally arriving at a working HTTP/SSL implementation.
 
 ** Implementing an HTTP Client
+   :PROPERTIES:
+   :header-args: :noweb-ref insecure_http.c
+   :END:
+
 #+cindex:HTTP client, implementing
-Web browsers are complex because they need to parse and render HTML---and in
-most cases, render images, run Javascript, Flashj, Java Applets and leave room
+Web browsers  are complex because they  need to parse and  render HTML---and in
+most cases, render  images, run Javascript, Flash, Java Applets  and leave room
 for new, as-yet-uninvented add-ons.
 
 #+cindex:wget utility
@@ -420,12 +424,13 @@ However, a web client that only retrieves a document from a server, such as the
 pretty   simple.  Most   of  the   complexity   is  in   the  socket   handling
 itself---establishing the socket and sending and receiving data over it.
 
-Start with all  of the includes that go along  with socket communication, shown
-in Listing 1-1.
+*** Implementing the HTTP Client Header---Includes---Defines
 
-#+caption:"http.c" header includes
+Start with all  of the ~#include~'s  and ~#define~'s that go  along with socket
+communication, shown in Listing 1-1.
+
+#+caption:"http.c" header #includes and #defines
 #+name:http.c-header-includes
-#+header: :mkdirp yes :tangle resources/src/http.c
 #+begin_src c
   /**
   ,*  This test utility does simple (non-encrypted) HTTP
@@ -441,18 +446,13 @@ in Listing 1-1.
   #include <netinet/in.h>
   #include <unistd.h>
 
+  #define HTTP_PORT        80
+  #define BUFFER_SIZE     255
+  #define MAX_GET_COMMAND 255
+
 #+end_src
 
-The following are function declarations required by C99.
-
-#+caption:"http.c" function declarations
-#+name:http.c-function-declarations
-#+header: :mkdirp yes :tangle resources/src/http.c
-#+begin_src c
-  int parse_url( char *, char **, char **);
-  int http_get( int, const char *, const char * );
-  void display_result( int );
-#+end_src
+*** Implementing the HTTP Client Function =parse_url= 
 
 #+pindex:parse_url
 The main routine is invoked with a URL of the form
@@ -462,7 +462,6 @@ shown in Listing 1-2.
 
 #+caption:"http.c" parse_url
 #+name:http.c-parse_url
-#+header: :mkdirp yes :tangle resources/src/http.c
 #+begin_src c
   /**
    ,* Accept a well-formed URL (e.g. http://www.company.com/index.html) and return
@@ -497,6 +496,7 @@ shown in Listing 1-2.
 
     return 0;
   }
+
 #+end_src
 
 You scan through the URL, looking for the delimiters =//= and =/= and replace
@@ -505,116 +505,7 @@ calling function passes in two pointers to pointers; these should be null when
 the function starts and will be modified to point into the =uri= string, which
 came from ~argv~.
 
-The main routine that coordinates all of this is shown in Listing 1-3.
-
-#+caption: "http.c" main
-#+name:http.c-main
-#+header: :mkdirp yes :tangle resources/src/http.c
-#+begin_src c
-  #define HTTP_PORT	80
-
-  /**
-   ,*  Simple command-line HTTP client.
-   ,*/
-
-  int main( int argc, char *argv[ ] )
-  {
-    int client_connection;
-    char *host, *path;
-    struct hostent *host_name;
-    struct sockaddr_in host_address;
-
-    if ( argc < 2 )
-      {
-	fprintf( stderr, "Uszge: %s: <URL>\n", argv[ 0 ] );
-	return 1;
-      }
-
-    if ( parse_url( argv[ 1 ], &host, &path ) == -1 )
-      {
-	fprintf( stderr, "Error - malformed URL '%s . \n", argv[ 1 ] );
-	return 1;
-      }
-
-    printf( "Conecting to host '%s'\n", host );
-#+end_src
-
-After the  URL has  been parsed  and the host  is known,  you must  establish a
-socket to it. In order to do  this, convert it from a human-readable host name,
-as =www.server.com=, to a dotted-decimal IP address, such as =100.218.64.2=.
-You call the standard ~gethostbyname~ library function to do this, and connect
-to the server.  This is shown in Listing 1-4.
-
-#+caption:"http.c" main (continued)
-#+name:http.c-main-continued
-#+header: :mkdirp yes :tangle resources/src/http.c
-#+begin_src c
-  // Step 1: open a socket connection on http port with the destination host
-
-    client_connection = socket( PF_INET, SOCK_STREAM, 0 );
-
-    if ( !client_connection )
-    {
-      perror( "Unable to create a local socket" );
-      return 2;
-    }
-
-    host_name = gethostbyname( host );
-
-    if ( !host_name )
-    {
-      perror( "Error in name resolution" );
-      return 3;
-    }
-
-    host_address.sin_family = AF_INET;
-    host_address.sin_port = htons( HTTP_PORT );
-    memcpy( &host_address.sin_addr, host_name->h_addr_list[ 0 ],
-	  sizeof( struct in_addr ) );
-
-    if ( connect( client_connection, ( struct sockaddr * ) &host_address,
-	    sizeof( host_address ) ) == -1 )
-    {
-      perror( "Unable to connect to host" );
-      return 4;
-    }
-
-    printf( "Retrieving document: '%s'\n", path );
-#+end_src
-
-Assuming nothing went wrong:
-
-- the socket structure could be created
-- the hostname could be resolved to an IP address
-- the IP address was reachable, and
-- the server accepted your connection on the well-known port 80
-
-
-you now have a  usable (cleartext) socket with which to  exchange data with the
-web server. Issue a =GET= command, display the result, and close the socket, as
-shown in Listing 1-5.
-
-#+caption:"http.c" main-continued-2
-#+name:http.c-main-continued-2
-#+header: :mkdirp yes :tangle resources/src/http.c
-#+begin_src c
-  // Step 2: Issue a GET command
-
-    http_get( client_connection, path, host );
-
-    display_result( client_connection );
-
-    printf( "Shutting down.\n" );
-
-    if (close( client_connection ) == -1 )
-    {
-      perror( "Error closing client connection" );
-      return 5;
-    }
-
-    return 0;
-  }
-#+end_src
+*** Implementing An HTTP GET Command Function
 
 An HTTP =GET= command is a simple,  plaintext command. It starts with the three
 ASCII-encoded letters  =G E T=,  all in uppercase  (HTTP is case  sensitive), a
@@ -648,9 +539,7 @@ host header).
 
 #+caption:"http.c" http_get
 #+name:http.c-http_get
-#+header: :mkdirp yes :tangle resources/src/http.c
 #+begin_src c
-  #define MAX_GET_COMMAND 255
   /**
    ,* Format and send an HTTP get command. The return value will be 0 on
    ,* success, -1 on failure, with errno set appropriately. The caller
@@ -681,7 +570,10 @@ host header).
 
     return 0;
   }
+
 #+end_src
+
+*** Implementing a =display_result= Function
 
 Finally, output the response from the  server. To keep things simple, just dump
 the contents of the response on stdout. An HTTP response has a standard format,
@@ -718,10 +610,7 @@ dump their contents, verbatim, on stdout, as shown in Listing 1-7.
 
 #+caption:"http.c" display_result
 #+name:http.c-display_result
-#+header: :mkdirp yes :tangle resources/src/http.c
 #+begin_src c
-  #define BUFFER_SIZE 255
-
   /**
    ,* Receive all data available on a connection and dump it to stdout
    ,*/
@@ -740,6 +629,7 @@ dump their contents, verbatim, on stdout, as shown in Listing 1-7.
 
     printf( "\n" );
   }
+
 #+end_src
 
 This is all that's required to implement a bare-bones web client.  Note,
@@ -748,6 +638,128 @@ that's transmitted between the client and the server is observable, in
 plaintext, to every host in between.  In general, if you want to protect the
 transmission from eavesdroppers, you establish SSL context---that is, /secure
 the line/---prior to sending the =GET= command.
+
+*** Implementing the Insecure HTTP Client =main= Function
+
+The main routine that coordinates all of this is shown in Listing 1-3.
+
+#+caption: "http.c" main
+#+name:http.c-main
+#+begin_src c
+  /**
+   ,*  Simple command-line HTTP client.
+   ,*/
+
+  int main( int argc, char *argv[ ] )
+  {
+    int client_connection;
+    char *host, *path;
+    struct hostent *host_name;
+    struct sockaddr_in host_address;
+
+    if ( argc < 2 )
+      {
+	fprintf( stderr, "Uszge: %s: <URL>\n", argv[ 0 ] );
+	return 1;
+      }
+
+    if ( parse_url( argv[ 1 ], &host, &path ) == -1 )
+      {
+	fprintf( stderr, "Error - malformed URL '%s . \n", argv[ 1 ] );
+	return 1;
+      }
+
+    printf( "Conecting to host '%s'\n", host );
+
+#+end_src
+
+After the  URL has  been parsed  and the host  is known,  you must  establish a
+socket to it. In order to do  this, convert it from a human-readable host name,
+as =www.server.com=, to a dotted-decimal IP address, such as =100.218.64.2=.
+You call the standard ~gethostbyname~ library function to do this, and connect
+to the server.  This is shown in Listing 1-4.
+
+#+caption:"http.c" main (continued)
+#+name:http.c-main-continued
+#+begin_src c
+    // Step 1: open a socket connection on http port with the destination host
+
+    client_connection = socket( PF_INET, SOCK_STREAM, 0 );
+
+    if ( !client_connection )
+    {
+      perror( "Unable to create a local socket" );
+      return 2;
+    }
+
+    host_name = gethostbyname( host );
+
+    if ( !host_name )
+    {
+      perror( "Error in name resolution" );
+      return 3;
+    }
+
+    host_address.sin_family = AF_INET;
+    host_address.sin_port = htons( HTTP_PORT );
+    memcpy( &host_address.sin_addr, host_name->h_addr_list[ 0 ],
+	  sizeof( struct in_addr ) );
+
+    if ( connect( client_connection, ( struct sockaddr * ) &host_address,
+	    sizeof( host_address ) ) == -1 )
+    {
+      perror( "Unable to connect to host" );
+      return 4;
+    }
+
+    printf( "Retrieving document: '%s'\n", path );
+
+#+end_src
+
+Assuming nothing went wrong:
+
+- the socket structure could be created
+- the hostname could be resolved to an IP address
+- the IP address was reachable, and
+- the server accepted your connection on the well-known port 80
+
+
+You now have a  usable (cleartext) socket with which to  exchange data with the
+web server. Issue a =GET= command, display the result, and close the socket, as
+shown in Listing 1-5.
+
+#+caption:"http.c" main-continued-2
+#+name:http.c-main-continued-2
+#+begin_src c
+    // Step 2: Issue a GET command
+
+    http_get( client_connection, path, host );
+
+    display_result( client_connection );
+
+    printf( "Shutting down.\n" );
+
+    if (close( client_connection ) == -1 )
+    {
+      perror( "Error closing client connection" );
+      return 5;
+    }
+
+    return 0;
+  }
+
+#+end_src
+
+** Implementing an HTTP Client Code
+
+This is the full code listing for the Insecure HTTP Client.
+
+#+header: :noweb yes
+#+header: :mkdirp yes
+#+header: :tangle resources/src/implementing-http-client/insecure-http-client/insecure_http.c
+#+begin_src c
+<<insecure_http.c>>
+#+end_src
 
 * Build Tools
 :PROPERTIES:
