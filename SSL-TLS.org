@@ -3,8 +3,8 @@
 #+title:Implementing SSL TLS Using Cryptography and PKI
 #+subtitle:{{{version}}} {{{date}}}
 #+author:LOLH
-#+date:2020-11-16 21:22
-#+macro:version Version 0.0.2
+#+date:2020-11-19 07:01
+#+macro:version Version 0.0.3
 #+macro:upload-date (eval (current-time-string))
 #+bucket:pinecone-forest.com
 
@@ -269,11 +269,11 @@ against.  This book was written for you---the professional programmer who
 understands the basics of security but wants to uncover the details without
 reading thousands of pages of specifications.
 
-This book begins by examining sockets and socket programming in brief.
+This book begins by examining *sockets* and *socket programming* in brief.
 
-Afterward, it moves on to a detailed examination of cryptographic concepts.
+Afterward, it moves on to a detailed examination of *cryptographic concepts*.
 
-and finally applies thenm to SSL/TLS.
+and finally applies thenm to *SSL/TLS*.
 
 You examine what SSL/TLS does, what it doesn't do, and how it does it.
 
@@ -282,6 +282,9 @@ You examine what SSL/TLS does, what it doesn't do, and how it does it.
 The Internet is a /packet-switching/ network.
 
 #+cindex:packetize data
+#+cindex:data, packets
+#+cindex:router
+#+cindex:destination address
 This means that, for two hosts to communicate, they must /packetize/ their data
 and  submit it  to a  router  with the  destination address  prepended to  each
 packet. The router then analyzes the  destination address and routes the packet
@@ -290,19 +293,23 @@ target host.
 
 #+cindex:Internet Protocol
 #+cindex:IP
-#+cindex:RFC 971
-The /Internet Protocol/  (IP), outlined in [[https://www.ietf.org/rfc/rfc971.txt][RFC 971]], describes  the standard for
+#+cindex:RFC 971, packetization
+#+cindex:packetization RFC 971
+The /Internet Protocol/ (IP), outlined in ([[https://www.ietf.org/rfc/rfc791.txt][RFC 791]]), describes the standard for
 how this packetization  is performed and how addresses are  attached to packets
 in headers.
 
 A packet can and probably will pass through many routers between the sender and
 the receiver.  If the contents  of the data in  that packet are  sensitive, the
-sender  would probably  like to  ensure  taht only  the receiver  can read  the
-packet, rather than the packet being readableby any router along the way.
+sender  would probably  like to  ensure  that only  the receiver  can read  the
+packet, rather than the packet being readable by any router along the way.
 
-Even if the sender trusts the routers and their operators, routers can be
-compromised by malicious individuals, called /attackers/ in security
-terminology, and tricked into forwarding traffic that's meant for one
+#+cindex:attacker
+#+cindex:spoofing, dns
+#+cindex:dns spoofing
+Even  if the  sender trusts  the routers  and their  operators, routers  can be
+compromised   by  malicious   individuals,  called   /attackers/  in   security
+terminology,  and  tricked  into  forwarding   traffic  that's  meant  for  one
 destination to another, as shown in
 - http://www.securesphere.net/download/papers/dnsspoof.htm
 - https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.1004.5649&rep=rep1&type=pdf
@@ -311,6 +318,7 @@ destination to another, as shown in
 
 
 #+cindex:traceroute
+#+cindex:hops
 To get an idea how many different  hosts a packet passes through betwen you and
 a  server,  you  can  use  the ~traceroute~  facility  that  comes  with  every
 Internet-capable  computer to  print a  list of  the hops  between you  and any
@@ -319,20 +327,22 @@ server on the Internet.
 : $ traceroute www.travelocity.com
 
 #+cindex:ICMP timeout packet
-Each router along the way is supposed to respond with a special packet called
-an ICMP timeout packet, as described in RFC 793, with its own address.  The
-routers that cnnot or will not do so are represented with =* * *=.
+#+cindex:Transport Control Protocol RFC 793
+#+cindex:RFC 793 TCP
+Each router along the  way is supposed to respond with  a special packet called
+an ICMP  timeout packet,  as described in  [[https://www.ietf.org/rfc/rfc793.txt][RFC 793]], with  its own  address. The
+routers that cannot or will not do so are represented with =* * *=.
 
-#+cindex:socket
+#+cindex:socket, definition
 #+cindex:synchronize (SYN) packet
 #+cindex:SYN (synchronize) packet
 In network programming parlance, the tenuous  connection between a sender and a
 receiver is referred  to as a /socket/.  When one host --- the  /client/ --- is
 ready to establish  a connection with another  --- the /server/ ---  it sends a
-/synchronize/ (SYN)  packet to the server.  If the server is  willing to accept
-the connection,  it responds with  a SYN  and acknowledge packet.  Finally, the
-client  acknowledges  the  acknowledgment  and  both sides  have  agreed  on  a
-connection.
+/synchronize/ (=SYN=) packet to the server.  If the server is willing to accept
+the connection, it responds with  a /synchronize/ and /acknowledge/ (=SYN/ACK=)
+packet. Finally, the client acknowledges the acknowledgment and both sides have
+agreed on a connection.
 
 #+cindex:TCP handshake
 #+cindex:handshake, TCP
@@ -344,16 +354,17 @@ The connection is associated with a pair  of numbers: the /source port/ and the
 /destination  port/,  which are  attached  to  each  subsequent packet  in  the
 communication.
 
-#+cindex:TCP
-#+cindex:Transport Control Protocol
+#+cindex:TCP RFC 793
+#+cindex:Transport Control Protocol RFC 793
 Because the server is sitting around, always listening for connections, it must
 advertise  its   destination  port  ahead  of   time.  How  this  is   done  is
 protocol-specific.  Some protocols  are lucky  enough to  have "magic  numbers"
 associated with  them that are well-known  (you the programmer are  supposed to
-know them). This  is the /Transport Control Protocol/ (TCP);  RFC 793 describes
+know them). This  is the /Transport Control Protocol/ (TCP);  [[https://www.ietf.org/rfc/rfc793.txt][RFC 793]] describes
 exactly how  this works and  how both sides agree  on a source  and destination
 port and how they sequence these and subsequent packets.
 
+#+cindex:sock
 TCP  and IP  are usually  implemented together  and called  TCP/IP. A  /socket/
 refers to an established TCP connection;  both sides, client and server, have a
 socket  after  the three-way  handshake  has  been  completed. If  either  side
@@ -369,6 +380,374 @@ has since been standardized and renamed /Transport Layer Security/ (TLS). After
 a socket has been established between the  client and the server, SSL defines a
 second handshake that  can be performed to establish a  secure channel over the
 inherently insecure TCP layer.
+
+** "Insecure" Communications---Understanding the HTTP Protocol
+#+cindex:HTTP
+#+cindex:Hypertext Transport Protocol
+#+cindex:RFC 2616, HTTP
+#+cindex:web clients, browsers
+#+cindex:web servers
+/HTTP/, or /Hypertext Transport Protocol/, officially described in [[https://www.ietf.org/rfc/rfc2616.txt][RFC 2616]], is
+the standard protocol for web communication.  Web clients ("browsers")
+establish sockets with web servers.  HTTP uses the established port 80.
+
+After the  socket has been  established, the  web browser begins  following the
+rules set forth by the HTTP protocol  to request documents. HTTP started out as
+a fairly simple protocol. Over the years, HTTP has been refined quite a bit and
+optimized for bandwidth, speed, and security features.
+
+#+cindex:SSL from HTTP
+#+cindex:HTTPS
+HTTP was  also the primary motivator  for SSL. Originally, SSL  didn't stand on
+its own; it was  designed as an add-on to HTTP, called  HTTPS. Although SSL was
+subsequently decoupled from HTTP, some of its features were optimized for HTTP,
+leaving it to be a bit of a square peg in a round hole in some other contexts.
+
+#+cindex:HTTP client, develop
+Because  HTTP and  SSL go  so well  together, in  this book  I motivate  SSL by
+developing an  HTTP client  and adding security  features to  it incrementally,
+finally arriving at a working HTTP/SSL implementation.
+
+** Implementing an HTTP Client
+#+cindex:HTTP client, implementing
+Web browsers are complex because they need to parse and render HTML---and in
+most cases, render images, run Javascript, Flashj, Java Applets and leave room
+for new, as-yet-uninvented add-ons.
+
+#+cindex:wget utility
+However, a web client that only retrieves a document from a server, such as the
+~wget~ utility  that comes standard  with most Unix distributions,  is actually
+pretty   simple.  Most   of  the   complexity   is  in   the  socket   handling
+itself---establishing the socket and sending and receiving data over it.
+
+Start with all  of the includes that go along  with socket communication, shown
+in Listing 1-1.
+
+#+caption:"http.c" header includes
+#+name:http.c-header-includes
+#+header: :mkdirp yes :tangle resources/src/http.c
+#+begin_src c
+  /**
+  ,*  This test utility does simple (non-encrypted) HTTP
+  ,*/
+
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <errno.h>
+  #include <string.h>
+  #include <sys/types.h>
+  #include <netdb.h>
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <unistd.h>
+
+#+end_src
+
+The following are function declarations required by C99.
+
+#+caption:"http.c" function declarations
+#+name:http.c-function-declarations
+#+header: :mkdirp yes :tangle resources/src/http.c
+#+begin_src c
+  int parse_url( char *, char **, char **);
+  int http_get( int, const char *, const char * );
+  void display_result( int );
+#+end_src
+
+#+pindex:parse_url
+The main routine is invoked with a URL of the form
+: http://www.server.com/path/to/document.html
+You need to separate the host and the path using a utility routine ~parse_url~,
+shown in Listing 1-2.
+
+#+caption:"http.c" parse_url
+#+name:http.c-parse_url
+#+header: :mkdirp yes :tangle resources/src/http.c
+#+begin_src c
+  /**
+   ,* Accept a well-formed URL (e.g. http://www.company.com/index.html) and return
+   ,* pointers to the host part and the path part. Note that this function
+   ,* modifies the uri itself as well. It returns 0 on success, -1 if the URL is
+   ,* found to be malformed in any way.
+   ,*/
+  int parse_url( char *uri, char **host, char **path )
+  {
+    char *pos;
+
+    pos = strstr( uri, "//" );
+
+    if ( !pos )
+      {
+	return -1;
+      }
+
+    ,*host = pos + 2;
+
+    pos = strchr( *host, '/' );
+
+    if ( !pos )
+      {
+	,*path = NULL;
+      }
+    else
+      {
+	,*pos = '\0';
+	,*path = pos + 1;
+      }
+
+    return 0;
+  }
+#+end_src
+
+You scan through the URL, looking for the delimiters =//= and =/= and replace
+them with null-terminators so that the caller can treat them as C strings.  The
+calling function passes in two pointers to pointers; these should be null when
+the function starts and will be modified to point into the =uri= string, which
+came from ~argv~.
+
+The main routine that coordinates all of this is shown in Listing 1-3.
+
+#+caption: "http.c" main
+#+name:http.c-main
+#+header: :mkdirp yes :tangle resources/src/http.c
+#+begin_src c
+  #define HTTP_PORT	80
+
+  /**
+   ,*  Simple command-line HTTP client.
+   ,*/
+
+  int main( int argc, char *argv[ ] )
+  {
+    int client_connection;
+    char *host, *path;
+    struct hostent *host_name;
+    struct sockaddr_in host_address;
+
+    if ( argc < 2 )
+      {
+	fprintf( stderr, "Uszge: %s: <URL>\n", argv[ 0 ] );
+	return 1;
+      }
+
+    if ( parse_url( argv[ 1 ], &host, &path ) == -1 )
+      {
+	fprintf( stderr, "Error - malformed URL '%s . \n", argv[ 1 ] );
+	return 1;
+      }
+
+    printf( "Conecting to host '%s'\n", host );
+#+end_src
+
+After the  URL has  been parsed  and the host  is known,  you must  establish a
+socket to it. In order to do  this, convert it from a human-readable host name,
+as =www.server.com=, to a dotted-decimal IP address, such as =100.218.64.2=.
+You call the standard ~gethostbyname~ library function to do this, and connect
+to the server.  This is shown in Listing 1-4.
+
+#+caption:"http.c" main (continued)
+#+name:http.c-main-continued
+#+header: :mkdirp yes :tangle resources/src/http.c
+#+begin_src c
+  // Step 1: open a socket connection on http port with the destination host
+
+    client_connection = socket( PF_INET, SOCK_STREAM, 0 );
+
+    if ( !client_connection )
+    {
+      perror( "Unable to create a local socket" );
+      return 2;
+    }
+
+    host_name = gethostbyname( host );
+
+    if ( !host_name )
+    {
+      perror( "Error in name resolution" );
+      return 3;
+    }
+
+    host_address.sin_family = AF_INET;
+    host_address.sin_port = htons( HTTP_PORT );
+    memcpy( &host_address.sin_addr, host_name->h_addr_list[ 0 ],
+	  sizeof( struct in_addr ) );
+
+    if ( connect( client_connection, ( struct sockaddr * ) &host_address,
+	    sizeof( host_address ) ) == -1 )
+    {
+      perror( "Unable to connect to host" );
+      return 4;
+    }
+
+    printf( "Retrieving document: '%s'\n", path );
+#+end_src
+
+Assuming nothing went wrong:
+
+- the socket structure could be created
+- the hostname could be resolved to an IP address
+- the IP address was reachable, and
+- the server accepted your connection on the well-known port 80
+
+
+you now have a  usable (cleartext) socket with which to  exchange data with the
+web server. Issue a =GET= command, display the result, and close the socket, as
+shown in Listing 1-5.
+
+#+caption:"http.c" main-continued-2
+#+name:http.c-main-continued-2
+#+header: :mkdirp yes :tangle resources/src/http.c
+#+begin_src c
+  // Step 2: Issue a GET command
+
+    http_get( client_connection, path, host );
+
+    display_result( client_connection );
+
+    printf( "Shutting down.\n" );
+
+    if (close( client_connection ) == -1 )
+    {
+      perror( "Error closing client connection" );
+      return 5;
+    }
+
+    return 0;
+  }
+#+end_src
+
+An HTTP =GET= command is a simple,  plaintext command. It starts with the three
+ASCII-encoded letters  =G E T=,  all in uppercase  (HTTP is case  sensitive), a
+space, the path to  the document to be retrieved, another  space, and the token
+=HTTP/1.0= OR  =HTTP/1.1= depending on which  version of the HTTP  protocol the
+client understands.[fn:1]
+
+The =GET= command itself is  followed by a carriage-return/line-feed pair (0x0A
+0x0D) and a colon-separated, CRLF-delimited list of /headers/ that describe how
+the client wants the response to be returned. Only one header is required---the
+=Host= header,  which is required  to support /virtual hosting/,  the situation
+where  severral hosts  share one  IP  address or  vice-versa. The  =Connection=
+header is not  required, but in general  you should send it to  indicate to the
+client whether  you want  it to  =Keep-Alive= the  connection---if you  plan on
+requesting more documents on this same  socket---or =Close= it. if you omit the
+=Connection: Close=  header line  the server  keeps the  socket open  until the
+client closes it.  If you're just sending a single request and getting bakc a
+single response, it's easier to let the server just close the connection when
+it's done sending.  The header list is teminated by an empty CRLF pair.
+
+A minimal HTTP =GET= command looks like this:
+
+: GET /index.html HTTP/1.1
+: Host: www.server.com
+: Connection: close
+
+The code  to format and  submit a =GET= command  over an established  socket is
+shown in Listing 1-6. Note that the input is the socket itself---the connection
+argument---the path of the document being requested, and the host (to build the
+host header).
+
+#+caption:"http.c" http_get
+#+name:http.c-http_get
+#+header: :mkdirp yes :tangle resources/src/http.c
+#+begin_src c
+  #define MAX_GET_COMMAND 255
+  /**
+   ,* Format and send an HTTP get command. The return value will be 0 on
+   ,* success, -1 on failure, with errno set appropriately. The caller
+   ,* must then retrieve the response.
+   ,*/
+
+  int http_get( int connection, const char *path, const char *host )
+  {
+    static char get_command[ MAX_GET_COMMAND ];
+
+    sprintf( get_command, "GET /%s HTTP/1.1\r\n", path );
+    if ( send( connection, get_command, strlen( get_command ), 0 ) == -1 )
+    {
+      return -1;
+    }
+
+    sprintf( get_command, "Host: %s\r\n", host );
+    if ( send( connection, get_command, strlen( get_command ), 0 ) == -1 )
+    {
+      return -1;
+    }
+
+    sprintf( get_command, "Connection: close\r\n\r\n" );
+    if ( send( connection, get_command, strlen( get_command ), 0 ) == -1 )
+    {
+      return -1;
+    }
+
+    return 0;
+  }
+#+end_src
+
+Finally, output the response from the  server. To keep things simple, just dump
+the contents of the response on stdout. An HTTP response has a standard format,
+just like an  HTTP request. The response is the  token =HTTP/1.0= or =HTTP/1.1=
+depending on which  version the server understands (which  does not necessarily
+have to match the client's version), followed by a space, followed by a numeric
+code indicating the  status of the request---errored,  rejected, processed, and
+so on---followed by a textual, human-readable description of the meaning of the
+status code.
+
+Some of the more common status codes are shown in Table 1-1.
+
+#+caption:Common status codes
+#+name:common-http-response-status-codes
+|--------+-----------------------------------------------------------------------------|
+| Status | Meaning                                                                     |
+|--------+-----------------------------------------------------------------------------|
+|    200 | Everything was OK, requested document follows                               |
+|    302 | Requested document exists, but has been moved -- new location follows       |
+|    403 | Forbidden: requested document exists, but you are not authorized to view it |
+|    404 | Requested document not found                                                |
+|    500 | Internal server error                                                       |
+|--------+-----------------------------------------------------------------------------|
+
+Status codes are described in [[https://www.ietf.org/rfc/rfc2616.txt][RFC 2616]].
+
+The response status line is followed by a CRLF, and a series of
+colon-separated, CRLF delimited headers, a standalong CRL/blank line
+end-of-headers marker, and the document itself.
+
+For testing purposes, you don't care about the response itself, as long as you
+got one.  Therefore, don't make any efforts to parse these responses---just
+dump their contents, verbatim, on stdout, as shown in Listing 1-7.
+
+#+caption:"http.c" display_result
+#+name:http.c-display_result
+#+header: :mkdirp yes :tangle resources/src/http.c
+#+begin_src c
+  #define BUFFER_SIZE 255
+
+  /**
+   ,* Receive all data available on a connection and dump it to stdout
+   ,*/
+
+  void display_result( int connection )
+  {
+    int received = 0;
+
+    static char recv_buf[ BUFFER_SIZE + 1 ];
+
+    while ( ( received = recv( connection, recv_buf, BUFFER_SIZE, 0 ) ) > 0 )
+    {
+      recv_buf[ received ] = '\0';
+      printf( "%s", recv_buf );
+    }
+
+    printf( "\n" );
+  }
+#+end_src
+
+This is all that's required to implement a bare-bones web client.  Note,
+however, that because the socket created was a cleartext socket, everything
+that's transmitted between the client and the server is observable, in
+plaintext, to every host in between.  In general, if you want to protect the
+transmission from eavesdroppers, you establish SSL context---that is, /secure
+the line/---prior to sending the =GET= command.
 
 * Build Tools
 :PROPERTIES:
@@ -1432,14 +1811,17 @@ Copyright \copy 2020 by {{{author}}}
 #+texinfo_printed_title:SSL-TLS---Implementing SSL TLS Using Cryptography and PKI
 
 
+* Local Variables						   :noexport:
 * Footnotes
 
-[fn:1]In the browser, add =index.text= to the end of the URL to see the source.
+[fn:1]At the time of this writing, there are only two versions of HTTP; the
+differences are immaterial to this book.
 
-[fn:2]Markdown requires the standard Perl library module Digest::MD5.
+[fn:2]In the browser, add =index.text= to the end of the URL to see the source.
+
+[fn:3]Markdown requires the standard Perl library module Digest::MD5.
 
 
-* Local Variables						   :noexport:
 # Local Variables:
 # fill-column: 79
 # indent-tabs-mode: t
