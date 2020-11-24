@@ -3,8 +3,8 @@
 #+title:Implementing SSL TLS Using Cryptography and PKI
 #+subtitle:{{{version}}} {{{date}}}
 #+author:LOLH
-#+date:2020-11-23 21:19
-#+macro:version Version 0.0.6
+#+date:2020-11-23 21:32
+#+macro:version Version 0.0.7
 #+macro:upload-date (eval (current-time-string))
 #+bucket:pinecone-forest.com
 
@@ -764,6 +764,9 @@ finally arriving at a working HTTP/SSL implementation.
  #+end_src
 
 *** Adding Support for HTTP Proxies
+:PROPERTIES:
+:header-args: :noweb-ref insecure_http.c-with_proxy
+:END:
 Notice that a socket  had to be created from the client to  the server before a
 document could  be requested.   This means that  the client had  to be  able to
 construct a  =SYN= packet, hand  that off  to a router,  which hands it  off to
@@ -787,11 +790,11 @@ proxy server, and the =GET= request now includes the full URL.
 Because proxies present some unique challenges  for SSL, go ahead and add proxy
 support to the minimal HTTP client developed in the preceding section.
 
-1.  You  need  to  modify  the   main  routine  to  accept  an  optional  proxy
-   specification parameter.   A proxy specification includes  the /hostname/ of
-   the  proxy server  itself, but  it also  typically allows  a /username/  and
-   /password/  to  be   passed  in,  as  most  HTTP  proxies   are  or  can  be
-   authenticating.
+**** Implementing Proxy Support in ~main~ 
+You need to  modify the main routine to accept  an optional proxy specification
+parameter.  A proxy  specification includes the /hostname/ of  the proxy server
+itself, but it  also typically allows a /username/ and  /password/ to be passed
+in, as most HTTP proxies are or can be authenticating.
 
    : http://[username:password@]hostname[:port]/
 
@@ -894,6 +897,7 @@ in a pointer  to the ~argv~ string,  insert nulls at strategic  places, and set
 ~char  *~ pointers  to  the  appropriate places  within  the  ~argv~ string  to
 represent the individual pieces.
 
+**** Implementing Insecure HTTP ~parse_proxy_param~ Code
 #+caption: “http.c” parse_proxy_param
 #+name:http.c-parse_proxy_param-1
 #+begin_src c
@@ -987,6 +991,7 @@ The port number is also optional.  If there’s a =:= character before the end o
 the proxy specification, it denotes a port; otherwise, assume the standard HTTP
 port 80.
 
+**** Implementing Insecure HTTP with Proxy Support---~http_get~ Routine
 At this point  you have all the  pieces you need for HTTP  proxy support except
 for the changes to the actual  ~http_get~ routine.  When connecting to a proxy,
 you need  to send  a whole  hostname because  the socket  itself has  just been
@@ -1028,16 +1033,12 @@ the simplest of  the three, and the  only one you will support.   The format of
 /connection  string/ varies  depending on  the  =METHOD=.  For  =BASIC=, it  is
 ~base64_encode(’username:passord’).
 
+*** Insecure HTTP with Proxy Support Full Listing
 #+caption:Listing for Proxy Support
 #+name:simple-http-with-proxy-support
 #+header: :noweb yes
 #+begin_src c
-  <<http.c-main-proxy-1>>
-  <<http.c-main-proxy-2>>
-  <<http.c-parse_proxy_param-1>>
-  <<http.c-parse_proxy_param-2>>
-  <<http.c-parse_proxy_param-3>>
-  <<http_get-proxy>>
+  <<insecure_http.c-with_proxy>>
 #+end_src
 
 * Build Tools
