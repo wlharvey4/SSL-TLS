@@ -3,8 +3,8 @@
 #+title:Implementing SSL TLS Using Cryptography and PKI
 #+subtitle:{{{version}}} {{{date}}}
 #+author:LOLH
-#+date:2020-11-19 10:00
-#+macro:version Version 0.0.5
+#+date:2020-11-23 21:19
+#+macro:version Version 0.0.6
 #+macro:upload-date (eval (current-time-string))
 #+bucket:pinecone-forest.com
 
@@ -762,6 +762,283 @@ finally arriving at a working HTTP/SSL implementation.
  #+begin_src c -n
  <<insecure_http.c>>
  #+end_src
+
+*** Adding Support for HTTP Proxies
+Notice that a socket  had to be created from the client to  the server before a
+document could  be requested.   This means that  the client had  to be  able to
+construct a  =SYN= packet, hand  that off  to a router,  which hands it  off to
+another router, and  so on until its  received by the server.   The server then
+constructs  its own  =SYN/ACK=  packet, hands  it  off, and  so  on until  it’s
+received by the  client.  However, in corporate  intranet environments, packets
+from  outside the  corporate domain  are not  allowed in,  and vice  versa.  In
+effect, there is no route from the client  to the server with which it wants to
+connect.
+
+It’s typical to set up a /proxy  server/ that can connect to the outside world,
+and have  the client funnel its  requests through the proxy.   This changes the
+dynamics  a bit;  the client  establishes a  socket connection  with the  proxy
+server first, and issues  a =GET= request to it.  After  the proxy examines the
+request to determine  the host name, resolves the IP  address, connects to that
+IP address on  behalf of the clinet, re-issues the  =GET= request, and forwards
+the response  back to the  client.  This subtly  changes the dynamics  of HTTP.
+What’s important  to notice is  that the client  establishes a socket  with the
+proxy server, and the =GET= request now includes the full URL.
+
+Because proxies present some unique challenges  for SSL, go ahead and add proxy
+support to the minimal HTTP client developed in the preceding section.
+
+1.  You  need  to  modify  the   main  routine  to  accept  an  optional  proxy
+   specification parameter.   A proxy specification includes  the /hostname/ of
+   the  proxy server  itself, but  it also  typically allows  a /username/  and
+   /password/  to  be   passed  in,  as  most  HTTP  proxies   are  or  can  be
+   authenticating.
+
+   : http://[username:password@]hostname[:port]/
+
+   where  =hostname= is  the  only part  that is  required.   Modify your  main
+   routine to accept an optional proxy parameter, preceded by =-p=.
+
+
+#+caption: “http.c” main with proxy support
+#+name:http.c-main-proxy-1
+#+begin_src c
+  /**
+   ,*  Simple command-line HTTP client with Proxy support
+   ,*/
+
+  int main( int argc, char *argv[ ] )
+  {
+    int client_connection;
+    //---------------------------------------------
+    char *proxy_host, *proxy_user, *proxy_password;
+    int proxy_port;
+    //---------------------------------------------
+    char *host, *path;
+    struct hostent *host_name;
+    struct sockaddr_in host_address;
+    //---------------------------------------------
+    int ind;
+    //---------------------------------------------
+
+    if ( argc < 2 )
+      {
+	fprintf( stderr, "Usage: %s: <URL>\n", argv[ 0 ] );
+	return 1;
+      }
+
+    if ( parse_url( argv[ 1 ], &host, &path ) == -1 )
+      {
+	//------------------------------------------------------------------------
+	fprintf( stderr,
+		 "Usage: %s: [-p http://[username:password*]proxy-host:proxy-port]\
+  <URL>\n",
+		 argv[ 0 ] );
+	//------------------------------------------------------------------------
+	return 1;
+      }
+
+    //------------------------------------------------------------------------
+    proxy_host = proxy_user = proxy_password = host = path = NULL;
+    ind = 1;
+    if ( !strcmp( "-p", argv[ ind ] ) )
+      {
+	if ( !parse_proxy_param( argv[ ++ind ], &proxy_host, &proxy_port,
+				 &proxy_user, &prox_password ) )
+	  {
+	    fprintf( stderr, "Error - malformed proxy parameter ’%s’.\n", argv[ 2 ] );
+	    return 2;
+	  }
+	ind++;
+      }
+    if ( parse_url ( argv[ ind ], &host, &path ) == -1 )
+    //------------------------------------------------------------------------
+#+end_src
+
+If the first argument is =-p=, take the second argument to be a proxy
+specification in the canonical form and parse it.  Either way, the lst argument
+is still a URL.
+
+If  ~parse_proxy_param~ succeeds,  ~proxy_host~ is  a non-null  pointer to  the
+host-name  of the  proxy  server.  You  need  to  maka a  few  changes to  your
+connection logic  to support this  correctly.  First,  you need to  establish a
+socket connection to the proxy host rather than the actual target HTTP host.
+
+#+caption: “http.c” main with proxy support (continued)
+#+name:http.c-main-proxy-2
+#+begin_src c
+  //------------------------------------------------------
+    if ( proxy_host )
+      {
+	printf( "Connecting to host ’%s’\n", proxy_host );
+	host_name = gethostbyname( proxy_host );
+      }
+    else
+  //-------------------------------------------------------
+      {
+	printf( "Connecting to host ’%s’\n", host );
+	host_name = gethostbyname( host );
+      }
+    host_address.sin_family = AF_INET;
+    host_address.sin_port = htons( proxy_host ? proxy_port : HTTP_PORT );
+    memcpy( &host_address.sin_addr, host_name->h_addr_list[ 0 ],
+	  sizeof( struct in_addr) );
+
+  /*...*/
+  http_get( client_connection, path, host, proxy_host, proxy_user,
+	    proxy_password );
+#+end_src
+
+Finally,  pass the  proxy  host, user,  and password  to  ~http_get~.  The  new
+~parse_proxy_param~ function works similarly  to the ~parse_url~ function: pass
+in a pointer  to the ~argv~ string,  insert nulls at strategic  places, and set
+~char  *~ pointers  to  the  appropriate places  within  the  ~argv~ string  to
+represent the individual pieces.
+
+#+caption: “http.c” parse_proxy_param
+#+name:http.c-parse_proxy_param-1
+#+begin_src c
+  int parse_proxy_param( char *proxy_spec,
+			 char **proxy_host,
+			 int *proxy_port,
+			 char **proxy_user,
+			 char **proxy_password )
+  {
+    char *login_sep, *colon_sep, *trailer_sep;
+    // Technically, the user should start the proxy spec with
+    // “http://”. But, be forgiving if didn’t.
+    if ( !strncmp( "http://", proxy_spec, 7 ) )
+      {
+	proxy_spec += 7;
+      }
+  }
+#+end_src
+
+Check to see  if an authentication string has been  supplied.  If the =@=symbol
+appears in the ~proxy_spec~, it must be preceded by a =username:password= pair.
+If it is, parse  those out; if it isn’t, there’s no  error because the username
+and password are not strictly required.
+
+#+caption: “http.” parse_proxy_param (continued)
+#+name:http.c-parse_proxy_param-2
+#+begin_src c
+  //
+    login_sep = strchr( proxy_spec, '@' );
+
+    if ( login_sep )
+    {
+      colon_sep = strchr( proxy_spec, ':' );
+      if ( !colon_sep || ( colon_sep > login_sep ) )
+	{
+	  // Error - if username supplied, password must be supplied
+	  fprintf( stderr, "Expected password in ’%s’\n", proxy_spec );
+	  return 0;
+	}
+      ,*colon_sep = '\0';
+      ,*proxy_user = proxy_spec;
+      ,*login_sep = '\0';
+      ,*proxy_password = colon_sep + 1;
+      proxy_spec = login_sep + 1;
+    }
+#+end_src
+
+Notice  that,  if  a  username  and  password  are  supplied,  you  modify  the
+~proxy_spec~ parameter  to point  to the  character after  the =@=.   This way,
+~proxy_spec~ now points to the proxy  host whether an authentication string was
+supplied or not.
+
+Here is the  rest of the proxy  parameter parsing---the user can  supply a port
+number if the proxy is listening on a non-standard port.
+
+#+caption: “http.c” parse_proxy_param (continued 2)
+#+name:http.c-parse_proxy_param-3
+#+begin_src c
+  // if the user added a “/” on the end
+  // just ignore it
+  trailer_set = strchr( proxy_spec, '/');
+  if ( trailer_sep )
+    {
+      ,*trailer_sep = '\0';
+    }
+
+  colon_sep = strchr( proxy_spec, ':' );
+  if (colon_sep )
+    {
+      // non-standard proxy port
+      ,* colon_sep = '\0';
+      ,*proxy_host = proxy_spec;
+      ,*proxy_port = atoi( colon_sep + 1 );
+      if ( *proxy_port == 0 )
+	{
+	  // 0 is not a valid port; this is an error; whether
+	  // it was mistyped or specified as 0.
+	  return 0;
+	}
+    }
+   else
+     {
+       ,*proxy_port = HTTP_PORT;
+       ,*proxy_host = proxy_spec;
+     }
+  return 1;
+  }
+#+end_src
+
+The port number is also optional.  If there’s a =:= character before the end of
+the proxy specification, it denotes a port; otherwise, assume the standard HTTP
+port 80.
+
+At this point  you have all the  pieces you need for HTTP  proxy support except
+for the changes to the actual  ~http_get~ routine.  When connecting to a proxy,
+you need  to send  a whole  hostname because  the socket  itself has  just been
+established between the client and the proxy.  The request line becomes:
+: GET http://host/path HTTP/1.0
+Chage ~http_get~  as shown  to recognize  this case  and send  a proxy-friendly
+=GET= command if a proxy host parameter has been supplied.
+
+#+caption:http_get (modified for proxy support)
+#+name:http_get-proxy
+#+begin_src c
+  int http_get( int connection,
+		const char *path,
+		const char *host,
+		const char *proxy_host,
+		const char *proxy_user,
+		const char *proxy_password )
+  {
+    static char get_command[ MAX_GET_COMMAND ];
+    if ( proxy_host )
+      {
+	sprintf( get_command, "GET http://%s/%s HTTP/1.1\r\n", host, path );
+      }
+    else
+      {
+	sprintf( get_command, "GET /%s HTTP/1.1 \r\n", path );
+      }
+  }
+#+end_src
+
+If the proxy is non-authenticating, this is all you need to do.  If the proxy
+is an authenticating proxy, as most are, you need to supply an additional HTTP
+header line including the proxy authorization string.
+: Proxy-Authorization: [METHOD] [connection string]
+
+=[METHOD]=, according to  RFC 2617, is one of =BASIC=,  or =DIGEST=.  It’s also
+common to  see the non-standard  =NTLM= in Microsoft environments.   =BASIC= is
+the simplest of  the three, and the  only one you will support.   The format of
+/connection  string/ varies  depending on  the  =METHOD=.  For  =BASIC=, it  is
+~base64_encode(’username:passord’).
+
+#+caption:Listing for Proxy Support
+#+name:simple-http-with-proxy-support
+#+header: :noweb yes
+#+begin_src c
+  <<http.c-main-proxy-1>>
+  <<http.c-main-proxy-2>>
+  <<http.c-parse_proxy_param-1>>
+  <<http.c-parse_proxy_param-2>>
+  <<http.c-parse_proxy_param-3>>
+  <<http_get-proxy>>
+#+end_src
 
 * Build Tools
 :PROPERTIES:
